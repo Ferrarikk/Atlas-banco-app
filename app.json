@@ -6,6 +6,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": { "backgroundColor": "#F7F5FC" },
+    "web": { "bundler": "metro" },
     "ios": { "supportsTablet": true, "bundleIdentifier": "com.atlasbank.app" },
     "android": { "package": "com.atlasbank.app", "adaptiveIcon": { "backgroundColor": "#5425A8" } }
   }
