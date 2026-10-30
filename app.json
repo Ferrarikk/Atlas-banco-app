@@ -2,21 +2,11 @@
   "expo": {
     "name": "Atlas Bank",
     "slug": "atlas-bank",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "splash": {
-      "backgroundColor": "#F7F5FC"
-    },
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.atlasbank.app"
-    },
-    "android": {
-      "package": "com.atlasbank.app",
-      "adaptiveIcon": {
-        "backgroundColor": "#5425A8"
-      }
-    }
+    "splash": { "backgroundColor": "#F7F5FC" },
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.atlasbank.app" },
+    "android": { "package": "com.atlasbank.app", "adaptiveIcon": { "backgroundColor": "#5425A8" } }
   }
 }
