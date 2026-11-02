@@ -3,6 +3,7 @@
 ## Prototype stage
 - [x] Ignore local environment files and signing credentials in Git.
 - [x] Document secret-handling rules.
+- [x] Draft initial Supabase schema with owner-scoped RLS and read-only demo account/transaction records (not yet applied or tested).
 - [ ] Add Supabase client with platform secure session storage.
 - [ ] Enable and test RLS policies before using any user data.
 - [ ] Add automated dependency and secret scanning.
