@@ -33,11 +33,12 @@ Abra o QR code com Expo Go compatível ou use um development build.
 
 - Tela inicial com identidade roxo profundo e branco.
 - Saldo e movimentações fictícios.
-- Sem conexão com banco de dados, PIX ou pagamentos reais.
+- Sem conexão ativa com banco de dados, PIX ou pagamentos reais.
+- Migração inicial do Supabase preparada em `supabase/migrations/`; ainda precisa ser aplicada e testada em um projeto Supabase.
 - Prévia web é apenas uma forma de visualizar o protótipo; não transforma o projeto em um serviço bancário.
 
 ## Segurança
 
-Leia [SECURITY.md](./SECURITY.md) e [docs/SECURITY_CHECKLIST.md](./docs/SECURITY_CHECKLIST.md). Autenticação, armazenamento seguro de sessão e RLS ainda precisam ser implementados e testados antes de usar dados pessoais.
+Leia [SECURITY.md](./SECURITY.md), [docs/SECURITY_CHECKLIST.md](./docs/SECURITY_CHECKLIST.md) e [supabase/README.md](./supabase/README.md) para configurar a base demonstrativa. Autenticação, armazenamento seguro de sessão e RLS ainda precisam ser implementados e testados antes de usar dados pessoais.
 
 Este protótipo não é uma instituição financeira e não está pronto para produção.
