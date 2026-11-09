@@ -1,35 +1,52 @@
 # Supabase — configuração inicial do Atlas Bank
 
-Esta etapa prepara somente a estrutura de dados do protótipo. Ela não cria uma conta bancária real nem movimenta dinheiro.
+Esta etapa prepara a base técnica do protótipo. Não cria conta bancária real nem movimenta dinheiro.
 
-## O que a migração cria
+## O que existe no repositório
 
 - `profiles`: perfil associado ao usuário autenticado.
-- `demo_accounts`: conta identificada explicitamente como demonstração.
+- `demo_accounts`: conta identificada como demonstração.
 - `demo_transactions`: lançamentos fictícios, sempre com status `simulated`.
-- Row Level Security (RLS) para que cada usuário autenticado só possa ler os próprios registros.
-- Nenhuma permissão do cliente para inserir ou alterar contas ou movimentações.
-- Um perfil e uma conta demonstrativa são criados quando um usuário é registrado no Supabase Auth.
+- RLS com leitura restrita ao proprietário.
+- Nenhuma permissão do cliente para inserir/alterar contas ou movimentações.
+- Trigger para criar perfil e conta demonstrativa após cadastro no Supabase Auth.
+- `src/lib/supabase.ts`: cliente Supabase opcional, configurado com variáveis públicas e adaptador de sessão criptografada para iOS/Android.
 
-Não existe coluna de saldo editável. O app não deve gravar saldo no cliente.
+**Ainda não confirmado:** não há evidência de que a migração tenha sido aplicada em um projeto Supabase, de que as políticas RLS tenham sido testadas ou de que o cliente esteja conectado às telas de login.
 
-## Como ativar quando o projeto Supabase estiver criado
+## Ativar em um projeto de desenvolvimento
 
-1. Abra o projeto Supabase correto.
-2. Entre em **SQL Editor**.
-3. Abra o arquivo `migrations/20261102100000_initial_demo_schema.sql) neste repositório.
+1. Crie um projeto Supabase de teste.
+2. Abra **SQL Editor**.
+3. Abra `migrations/20261102100000_initial_demo_schema.sql` neste repositório.
 4. Copie o SQL inteiro para uma nova consulta e execute.
-5. Confira em **Table Editor** se as três tabelas foram criadas.
-6. Antes de conectar o app, teste as políticas com dois usuários de teste diferentes e confirme que um não consegue consultar os registros do outro.
+5. Confira no **Table Editor** as três tabelas.
+6. Crie dois usuários de teste e valide que cada um só consegue ler seus próprios registros.
+7. Teste também que o cliente autenticado não consegue inserir/alterar contas nem transações.
 
-## Chaves e configuração do app
+Não use dados pessoais reais nesta etapa.
 
-- Use somente a URL do projeto e a chave publicável/anon no cliente.
-- Guarde os valores localmente em `.env`, usando `.env.example` como modelo.
-- Nunca envie chaves pelo chat nem as coloque no GitHub.
-- Nunca coloque a chave `service_role` no aplicativo, em `.env.example` ou em código cliente.
-- O cliente Supabase e o armazenamento seguro de sessão ainda não foram conectados nesta etapa.
+## Configuração local do app
 
-## Limites
+1. Copie `.env.example` para `.env` no ambiente de desenvolvimento.
+2. Preencha `EXPO_PUBLIC_SUPABASE_URL` e `EXPO_PUBLIC_SUPABASE_ANON_KEY` com a URL e a chave publicável/anon do projeto.
+3. Reinicie o Expo para recarregar as variáveis.
+4. Verifique `isSupabaseConfigured` em `src/lib/supabase.ts`.
 
-Esta migração é para dados demonstrativos. Não é um livro-razão financeiro, não integra Pix, não processa pagamentos e não autoriza operações reais. Qualquer operação futura deverá passar por backend confiável, ledger imutável, idempotência, controles antifraude, parceiro financeiro autorizado e revisão jurídica/regulatória.
+Nunca coloque a chave `service_role` no cliente, no `.env.example`, no GitHub ou em mensagens. Não compartilhe credenciais pelo chat.
+
+## Armazenamento de sessão
+
+- iOS/Android: a implementação cifra o valor da sessão com AES-CTR; a chave aleatória fica no Keychain/Android Keystore via Expo SecureStore e o conteúdo cifrado fica no AsyncStorage.
+- Web: o adaptador usa `localStorage` somente para a prévia demonstrativa. JavaScript executado na página pode acessar esse armazenamento. Para produção web, substituir por fluxo backend/BFF com cookies `HttpOnly`, `Secure` e `SameSite`.
+- Esta implementação é uma fundação inicial, não uma certificação ou garantia de segurança. Deve passar por revisão técnica e testes antes de qualquer uso com dados sensíveis.
+
+## Próximas etapas
+
+1. Aplicar e testar a migração/RLS no projeto Supabase.
+2. Conectar telas de cadastro, login, logout e recuperação de senha.
+3. Persistir sessão e proteger rotas.
+4. Buscar perfil e conta demonstrativa pelo usuário autenticado.
+5. Persistir somente lançamentos de demonstração por função/endpoint com autorização; nunca aceitar saldo enviado pelo cliente.
+
+Esta estrutura não é um livro-razão financeiro, não integra Pix, não processa pagamentos e não autoriza operações reais. Qualquer evolução financeira futura exige ledger no servidor, idempotência, controles antifraude, reconciliação, parceiro autorizado e revisão jurídica/regulatória.
