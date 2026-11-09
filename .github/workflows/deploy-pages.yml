@@ -1,8 +1,7 @@
 name: Deploy Expo web to GitHub Pages
 
 on:
-  push:
-    branches: [main]
+  # Run manually after GitHub Pages is enabled with source = GitHub Actions.
   workflow_dispatch:
 
 permissions:
