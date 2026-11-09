@@ -116,7 +116,7 @@ export default function App() {
     <Button title="Cancelar" onPress={() => setOperation(null)} secondary/>
   </> : null;
 
-  return <SafeAreaView style={s.safe}><StatusBar barStyle="dark-content" backgroundColor={C.white}/><ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+  return <SafeAreaView style={s.safe}><StatusBar barStyle="dark-content"/><ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
     {operation ? renderOperation() : active === "Início" ? renderHome() : active === "Extrato" ? renderStatement() : active === "Cartões" ? renderCards() : renderProfile()}
     {notice && !operation ? <TouchableOpacity style={s.noticeToast} onPress={() => setNotice("")}><Text style={s.noticeToastText}>{notice}  ×</Text></TouchableOpacity> : null}
   </ScrollView>
