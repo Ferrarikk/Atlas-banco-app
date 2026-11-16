@@ -6,9 +6,11 @@ Aplicativo demonstrativo para iOS e Android com Expo, React Native e TypeScript.
 
 - Interface de demonstração com início, extrato, cartões e perfil.
 - PIX, transferência e pagamento são apenas simulações locais; não movimentam dinheiro.
+- Telas de cadastro, login, recuperação de senha e logout chamam Supabase Auth quando as variáveis locais estão configuradas.
+- O modo demonstração continua disponível sem Supabase e usa apenas estado local, que pode ser perdido ao fechar o app.
 - Migração inicial do Supabase preparada em `supabase/migrations/`, ainda não confirmada como aplicada ou testada em um projeto.
-- Cliente Supabase criado em `src/lib/supabase.ts`, mas as telas de autenticação ainda não estão conectadas a ele.
-- Sessões nativas são preparadas para armazenamento criptografado usando uma chave no Keychain/Android Keystore e dados cifrados no AsyncStorage.
+- Cliente Supabase criado em `src/lib/supabase.ts` e fluxos de autenticação conectados no app; a conexão real ainda depende de um projeto Supabase e de teste com credenciais locais.
+- O armazenamento de sessão nativo atual é experimental e não foi auditado; não deve ser considerado seguro para uso financeiro ou produção.
 - Na prévia web, o armazenamento usa `localStorage` apenas para demonstração; não usar para contas reais.
 - O app não é instituição financeira e não está pronto para produção.
 
@@ -20,6 +22,7 @@ Aplicativo demonstrativo para iOS e Android com Expo, React Native e TypeScript.
 4. Teste as políticas RLS com dois usuários diferentes antes de conectar qualquer dado.
 5. Copie `.env.example` para `.env` localmente e preencha `EXPO_PUBLIC_SUPABASE_URL` e `EXPO_PUBLIC_SUPABASE_ANON_KEY` com os valores públicos do projeto.
 6. Nunca envie chaves pelo chat nem faça commit do arquivo `.env`. Nunca coloque a chave `service_role` no app.
+7. No app, teste cadastro, confirmação de e-mail, login, recuperação de senha e logout com contas fictícias. A confirmação do cadastro pode depender da configuração de e-mail do projeto Supabase.
 
 O arquivo `src/lib/supabase.ts` exporta `isSupabaseConfigured` e `supabase`. O cliente fica `null` enquanto as duas variáveis públicas não estiverem configuradas. A interface ainda precisa receber os fluxos de cadastro, login, recuperação de senha e sessão.
 
