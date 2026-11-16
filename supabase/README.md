@@ -10,9 +10,9 @@ Esta etapa prepara a base técnica do protótipo. Não cria conta bancária real
 - RLS com leitura restrita ao proprietário.
 - Nenhuma permissão do cliente para inserir/alterar contas ou movimentações.
 - Trigger para criar perfil e conta demonstrativa após cadastro no Supabase Auth.
-- `src/lib/supabase.ts`: cliente Supabase opcional, configurado com variáveis públicas e adaptador de sessão criptografada para iOS/Android.
+- `src/lib/supabase.ts`: cliente Supabase opcional, configurado com variáveis públicas e adaptador experimental de sessão nativa (não auditado).
 
-**Ainda não confirmado:** não há evidência de que a migração tenha sido aplicada em um projeto Supabase, de que as políticas RLS tenham sido testadas ou de que o cliente esteja conectado às telas de login.
+**Ainda não confirmado:** não há evidência de que a migração tenha sido aplicada em um projeto Supabase, de que as políticas RLS tenham sido testadas ou de que as telas de autenticação tenham sido executadas com credenciais de um projeto real. O código das telas de cadastro, login, recuperação e logout já chama Supabase Auth quando configurado.
 
 ## Ativar em um projeto de desenvolvimento
 
@@ -37,15 +37,15 @@ Nunca coloque a chave `service_role` no cliente, no `.env.example`, no GitHub ou
 
 ## Armazenamento de sessão
 
-- iOS/Android: a implementação cifra o valor da sessão com AES-CTR; a chave aleatória fica no Keychain/Android Keystore via Expo SecureStore e o conteúdo cifrado fica no AsyncStorage.
+- iOS/Android: o adaptador atual usa AES-CTR com chave aleatória no Keychain/Android Keystore e conteúdo no AsyncStorage, mas não autentica a integridade do ciphertext. É experimental e não deve ser tratado como armazenamento seguro de produção; substituir por uma solução auditada com criptografia autenticada.
 - Web: o adaptador usa `localStorage` somente para a prévia demonstrativa. JavaScript executado na página pode acessar esse armazenamento. Para produção web, substituir por fluxo backend/BFF com cookies `HttpOnly`, `Secure` e `SameSite`.
-- Esta implementação é uma fundação inicial, não uma certificação ou garantia de segurança. Deve passar por revisão técnica e testes antes de qualquer uso com dados sensíveis.
+- Nenhuma implementação de armazenamento está certificada. Não use esta versão com dados bancários, credenciais reais ou operações financeiras.
 
 ## Próximas etapas
 
 1. Aplicar e testar a migração/RLS no projeto Supabase.
-2. Conectar telas de cadastro, login, logout e recuperação de senha.
-3. Persistir sessão e proteger rotas.
+2. Configurar variáveis locais e testar cadastro, login, confirmação de e-mail, recuperação de senha e logout.
+3. Substituir o adaptador experimental de sessão por armazenamento seguro auditável e testar persistência no iOS/Android.
 4. Buscar perfil e conta demonstrativa pelo usuário autenticado.
 5. Persistir somente lançamentos de demonstração por função/endpoint com autorização; nunca aceitar saldo enviado pelo cliente.
 
