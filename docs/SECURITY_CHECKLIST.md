@@ -6,8 +6,9 @@
 - [x] Draft initial Supabase schema with owner-scoped RLS and read-only demo account/transaction records (not yet applied or tested).
 - [x] Add optional Supabase client configuration using public environment variables only.
 - [x] Add encrypted native session-storage adapter (code present; runtime and security testing still required).
-- [ ] Connect Supabase Auth to signup/login/logout/recovery screens.
+- [x] Add signup/login/logout/recovery flows calling Supabase Auth (project configuration and runtime tests still pending).
 - [ ] Apply migration in a Supabase development project and test RLS with two separate users.
+- [ ] Replace the experimental native session-storage adapter with a vetted, authenticated secure-storage approach; the current AES-CTR prototype has not been security-reviewed.
 - [ ] Verify native session persistence on physical iOS and Android devices.
 - [ ] Replace browser localStorage auth storage before any production web use; prefer a backend/BFF with secure HttpOnly cookies.
 - [ ] Add automated dependency and secret scanning.
