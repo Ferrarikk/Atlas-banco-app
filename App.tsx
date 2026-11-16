@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
+import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
 import {
   SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput,
   TouchableOpacity, View, Alert
@@ -6,6 +8,7 @@ import {
 
 type Tab = "Início" | "Extrato" | "Cartões" | "Perfil";
 type Operation = "PIX" | "Transferir" | "Pagar";
+type AuthMode = "login" | "signup" | "recovery";
 type Tx = { id: string; title: string; detail: string; amount: number; date: string; kind: "in" | "out" };
 
 const C = {
@@ -27,8 +30,8 @@ function BrandMark() {
 function Button({ title, onPress, secondary = false }: { title: string; onPress: () => void; secondary?: boolean }) {
   return <TouchableOpacity activeOpacity={0.78} onPress={onPress} style={[s.button, secondary && s.buttonSecondary]}><Text style={[s.buttonText, secondary && s.buttonTextSecondary]}>{title}</Text></TouchableOpacity>;
 }
-function Field({ label, value, onChangeText, placeholder, keyboardType = "default" }: any) {
-  return <View style={s.fieldWrap}><Text style={s.fieldLabel}>{label}</Text><TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#AAA5B1" keyboardType={keyboardType} autoCapitalize="none" style={s.input}/></View>;
+function Field({ label, value, onChangeText, placeholder, keyboardType = "default", secureTextEntry = false }: any) {
+  return <View style={s.fieldWrap}><Text style={s.fieldLabel}>{label}</Text><TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#AAA5B1" keyboardType={keyboardType} autoCapitalize="none" secureTextEntry={secureTextEntry} style={s.input}/></View>;
 }
 function Transaction({ tx }: { tx: Tx }) {
   return <View style={s.tx}><View style={s.txIcon}><Text style={s.txSymbol}>{tx.kind === "in" ? "↓" : "↗"}</Text></View><View style={s.txBody}><Text style={s.txTitle}>{tx.title}</Text><Text style={s.txDate}>{tx.detail}</Text></View><Text style={[s.txAmount, tx.kind === "in" ? s.income : s.expense]}>{tx.kind === "in" ? "+" : "−"} {money(Math.abs(tx.amount))}</Text></View>;
@@ -48,6 +51,97 @@ export default function App() {
   const [copiedPix, setCopiedPix] = useState(false);
   const [profileName, setProfileName] = useState("João");
   const [notice, setNotice] = useState("");
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(Boolean(supabase));
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authName, setAuthName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
+
+  useEffect(() => {
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+    let alive = true;
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!alive) return;
+      setSession(data.session);
+      if (error) setAuthMessage(error.message);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+    });
+    return () => {
+      alive = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    const metadataName = session.user.user_metadata?.display_name;
+    const emailName = session.user.email?.split("@")[0];
+    setProfileName(typeof metadataName === "string" && metadataName.trim() ? metadataName : (emailName || "Usuário"));
+  }, [session]);
+
+  const submitAuth = async () => {
+    if (!supabase) {
+      setAuthMessage("Supabase ainda não configurado. Adicione a URL e a chave pública no arquivo .env local.");
+      return;
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setAuthMessage("Informe seu e-mail.");
+      return;
+    }
+    if (authMode !== "recovery" && password.length < 8) {
+      setAuthMessage("Use uma senha com pelo menos 8 caracteres.");
+      return;
+    }
+    if (authMode === "signup" && !authName.trim()) {
+      setAuthMessage("Informe seu nome para criar a conta.");
+      return;
+    }
+    setAuthBusy(true);
+    setAuthMessage("");
+    try {
+      if (authMode === "recovery") {
+        const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail);
+        if (error) throw error;
+        setAuthMessage("Se o e-mail estiver cadastrado, você receberá as instruções de recuperação.");
+      } else if (authMode === "signup") {
+        const { data, error } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: { data: { display_name: authName.trim().slice(0, 60) } },
+        });
+        if (error) throw error;
+        if (!data.session) {
+          setAuthMessage("Cadastro iniciado. Confira seu e-mail para confirmar a conta antes de entrar.");
+        } else {
+          setAuthMessage("Conta de demonstração criada com sucesso.");
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password });
+        if (error) throw error;
+      }
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Não foi possível concluir a solicitação.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const signOut = async () => {
+    if (!supabase) return;
+    const { error } = await supabase.auth.signOut();
+    if (error) setNotice("Não foi possível encerrar a sessão: " + error.message);
+    else setNotice("Sessão encerrada.");
+  };
 
   const filtered = useMemo(() => transactions.filter(t => filter === "Todas" || (filter === "Entradas" ? t.kind === "in" : t.kind === "out")), [transactions, filter]);
   const go = (tab: Tab) => { setOperation(null); setNotice(""); setActive(tab); };
@@ -71,6 +165,25 @@ export default function App() {
     setActive("Extrato");
     setNotice("Simulação concluída. Nenhum dinheiro foi enviado ou pago.");
   };
+
+  const renderAuth = () => <>
+    <View style={s.authBrand}><BrandMark/></View>
+    <View style={s.authIntro}>
+      <Text style={s.authTitle}>{authMode === "signup" ? "Crie sua conta" : authMode === "recovery" ? "Recuperar acesso" : "Bem-vindo de volta"}</Text>
+      <Text style={s.authSubtitle}>{authMode === "signup" ? "Comece sua experiência no Atlas Bank." : authMode === "recovery" ? "Informe seu e-mail para receber as instruções." : "Entre para acessar sua conta demonstrativa."}</Text>
+    </View>
+    {!isSupabaseConfigured ? <View style={s.infoCard}><Text style={s.infoTitle}>Conexão ainda não configurada</Text><Text style={s.infoText}>O aplicativo já tem a tela de autenticação, mas precisa da URL e da chave pública de um projeto Supabase de desenvolvimento no arquivo .env local. Nenhuma credencial deve ser enviada pelo chat ou salva no GitHub.</Text></View> : null}
+    {authMode === "signup" ? <Field label="NOME" value={authName} onChangeText={setAuthName} placeholder="Seu nome"/> : null}
+    <Field label="E-MAIL" value={email} onChangeText={setEmail} placeholder="voce@exemplo.com" keyboardType="email-address"/>
+    {authMode !== "recovery" ? <Field label="SENHA (MÍNIMO 8 CARACTERES)" value={password} onChangeText={setPassword} placeholder="Sua senha" secureTextEntry/> : null}
+    {authMessage ? <Text style={s.authMessage}>{authMessage}</Text> : null}
+    <TouchableOpacity activeOpacity={0.8} disabled={authBusy} onPress={submitAuth} style={[s.button, authBusy && s.buttonBusy]}><Text style={s.buttonText}>{authBusy ? "Aguarde..." : authMode === "signup" ? "Criar conta" : authMode === "recovery" ? "Enviar instruções" : "Entrar"}</Text></TouchableOpacity>
+    {authMode === "login" ? <>
+      <TouchableOpacity onPress={() => { setAuthMode("recovery"); setAuthMessage(""); }} style={s.authLinkWrap}><Text style={s.authLink}>Esqueci minha senha</Text></TouchableOpacity>
+      <View style={s.authSwitch}><Text style={s.authSwitchText}>Ainda não tem conta? </Text><TouchableOpacity onPress={() => { setAuthMode("signup"); setAuthMessage(""); }}><Text style={s.authLink}>Criar cadastro</Text></TouchableOpacity></View>
+    </> : <View style={s.authSwitch}><TouchableOpacity onPress={() => { setAuthMode("login"); setAuthMessage(""); }}><Text style={s.authLink}>Voltar para entrar</Text></TouchableOpacity></View>}
+    <View style={s.demoNote}><View style={s.noteDot}/><View style={s.noteContent}><Text style={s.noticeTitle}>Protótipo de fintech</Text><Text style={s.noticeText}>Esta conta serve apenas para testar o aplicativo. Não deposite dinheiro nem informe dados bancários reais.</Text></View></View>
+  </>;
 
   const header = (title: string, subtitle?: string) => <View style={s.pageHeading}><Text style={s.pageTitle}>{title}</Text>{subtitle ? <Text style={s.pageSubtitle}>{subtitle}</Text> : null}</View>;
   const renderHome = () => <>
@@ -99,7 +212,9 @@ export default function App() {
     {header("Perfil", "Preferências da sua conta de demonstração.")}
     <View style={s.profileAvatar}><Text style={s.profileAvatarText}>{profileName.slice(0,1).toUpperCase()}</Text></View>
     <Field label="NOME DE EXIBIÇÃO" value={profileName} onChangeText={setProfileName} placeholder="Seu nome"/>
-    <View style={s.infoCard}><Text style={s.infoTitle}>Segurança e privacidade</Text><Text style={s.infoText}>O protótipo ainda não possui autenticação real, biometria ou armazenamento de dados pessoais. Não informe senhas nem dados bancários.</Text></View>
+    <View style={s.infoCard}><Text style={s.infoTitle}>Segurança e privacidade</Text><Text style={s.infoText}>A entrada e a recuperação de senha usam Supabase Auth quando configurado. Biometria, revisão do armazenamento de sessão e controles de produção ainda não foram concluídos.</Text></View>
+    <Text style={s.helper}>Sessão: {session?.user.email || "não autenticada"}</Text>
+    <Button title="Sair da conta" onPress={signOut} secondary/>
     <View style={s.settingRow}><Text style={s.settingTitle}>Notificações demonstrativas</Text><Text style={s.badge}>ATIVAS</Text></View>
     <Button title="Voltar ao início" onPress={() => go("Início")} secondary/>
   </>;
@@ -117,10 +232,10 @@ export default function App() {
   </> : null;
 
   return <SafeAreaView style={s.safe}><StatusBar barStyle="dark-content"/><ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-    {operation ? renderOperation() : active === "Início" ? renderHome() : active === "Extrato" ? renderStatement() : active === "Cartões" ? renderCards() : renderProfile()}
+    {authLoading ? <View style={s.authLoading}><Text style={s.authSubtitle}>Carregando sua sessão...</Text></View> : !session ? renderAuth() : operation ? renderOperation() : active === "Início" ? renderHome() : active === "Extrato" ? renderStatement() : active === "Cartões" ? renderCards() : renderProfile()}
     {notice && !operation ? <TouchableOpacity style={s.noticeToast} onPress={() => setNotice("")}><Text style={s.noticeToastText}>{notice}  ×</Text></TouchableOpacity> : null}
   </ScrollView>
-  {!operation ? <View style={s.tabs}>{(["Início","Extrato","Cartões","Perfil"] as Tab[]).map(tab => <TouchableOpacity key={tab} style={s.tabButton} onPress={() => go(tab)} activeOpacity={0.7}><Text style={[s.tabIcon, active === tab && s.tabIconActive]}>{tab === "Início" ? "⌂" : tab === "Extrato" ? "▤" : tab === "Cartões" ? "▣" : "○"}</Text><Text style={[s.tabText, active === tab && s.tabTextActive]}>{tab}</Text></TouchableOpacity>)}</View> : null}
+  {session && !operation && !authLoading ? <View style={s.tabs}>{(["Início","Extrato","Cartões","Perfil"] as Tab[]).map(tab => <TouchableOpacity key={tab} style={s.tabButton} onPress={() => go(tab)} activeOpacity={0.7}><Text style={[s.tabIcon, active === tab && s.tabIconActive]}>{tab === "Início" ? "⌂" : tab === "Extrato" ? "▤" : tab === "Cartões" ? "▣" : "○"}</Text><Text style={[s.tabText, active === tab && s.tabTextActive]}>{tab}</Text></TouchableOpacity>)}</View> : null}
   </SafeAreaView>;
 }
 function Quick({symbol,label,onPress}:{symbol:string;label:string;onPress:()=>void}) {
@@ -150,5 +265,6 @@ const s = StyleSheet.create({
   fieldWrap:{marginBottom:16},fieldLabel:{fontSize:9,fontWeight:"800",letterSpacing:1,color:C.muted,marginBottom:7},input:{height:48,borderWidth:1,borderColor:C.line,borderRadius:11,paddingHorizontal:13,color:C.ink,fontSize:13,backgroundColor:C.white},
   button:{height:49,backgroundColor:C.purple,borderRadius:12,alignItems:"center",justifyContent:"center",marginTop:12},buttonSecondary:{backgroundColor:C.white,borderWidth:1,borderColor:C.line},buttonText:{color:C.white,fontSize:12,fontWeight:"800"},buttonTextSecondary:{color:C.purple},
   back:{paddingVertical:8,marginBottom:8},backText:{fontSize:14,color:C.purple,fontWeight:"700"},available:{backgroundColor:C.purpleSoft,padding:14,borderRadius:11,marginBottom:12},availableLabel:{fontSize:9,color:C.muted,fontWeight:"800",letterSpacing:1},availableValue:{fontSize:18,color:C.purpleDark,fontWeight:"800",marginTop:5},error:{fontSize:11,color:C.red,marginVertical:7},
-  noticeToast:{padding:12,backgroundColor:C.purpleSoft,borderRadius:10,marginTop:17},noticeToastText:{fontSize:11,color:C.purpleDark}
+  noticeToast:{padding:12,backgroundColor:C.purpleSoft,borderRadius:10,marginTop:17},noticeToastText:{fontSize:11,color:C.purpleDark},
+  authBrand:{marginTop:28,marginBottom:45},authIntro:{marginBottom:25},authTitle:{fontSize:29,fontWeight:"800",color:C.ink},authSubtitle:{fontSize:12,color:C.muted,lineHeight:18,marginTop:7},authMessage:{fontSize:11,color:C.purpleDark,backgroundColor:C.purpleSoft,padding:12,borderRadius:10,lineHeight:17,marginTop:3},authLinkWrap:{alignItems:"center",paddingVertical:17},authLink:{fontSize:11,color:C.purple,fontWeight:"800"},authSwitch:{flexDirection:"row",justifyContent:"center",alignItems:"center",paddingVertical:16},authSwitchText:{fontSize:11,color:C.muted},buttonBusy:{opacity:0.65},authLoading:{minHeight:300,alignItems:"center",justifyContent:"center"}
 });
