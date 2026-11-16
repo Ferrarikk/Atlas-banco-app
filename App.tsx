@@ -52,6 +52,7 @@ export default function App() {
   const [profileName, setProfileName] = useState("João");
   const [notice, setNotice] = useState("");
   const [session, setSession] = useState<Session | null>(null);
+  const [demoMode, setDemoMode] = useState(false);
   const [authLoading, setAuthLoading] = useState(Boolean(supabase));
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authName, setAuthName] = useState("");
@@ -178,6 +179,7 @@ export default function App() {
     {authMode !== "recovery" ? <Field label="SENHA (MÍNIMO 8 CARACTERES)" value={password} onChangeText={setPassword} placeholder="Sua senha" secureTextEntry/> : null}
     {authMessage ? <Text style={s.authMessage}>{authMessage}</Text> : null}
     <TouchableOpacity activeOpacity={0.8} disabled={authBusy} onPress={submitAuth} style={[s.button, authBusy && s.buttonBusy]}><Text style={s.buttonText}>{authBusy ? "Aguarde..." : authMode === "signup" ? "Criar conta" : authMode === "recovery" ? "Enviar instruções" : "Entrar"}</Text></TouchableOpacity>
+    <Button title="Explorar em modo demonstração" onPress={() => { setDemoMode(true); setAuthMessage(""); }} secondary/>
     {authMode === "login" ? <>
       <TouchableOpacity onPress={() => { setAuthMode("recovery"); setAuthMessage(""); }} style={s.authLinkWrap}><Text style={s.authLink}>Esqueci minha senha</Text></TouchableOpacity>
       <View style={s.authSwitch}><Text style={s.authSwitchText}>Ainda não tem conta? </Text><TouchableOpacity onPress={() => { setAuthMode("signup"); setAuthMessage(""); }}><Text style={s.authLink}>Criar cadastro</Text></TouchableOpacity></View>
@@ -213,8 +215,8 @@ export default function App() {
     <View style={s.profileAvatar}><Text style={s.profileAvatarText}>{profileName.slice(0,1).toUpperCase()}</Text></View>
     <Field label="NOME DE EXIBIÇÃO" value={profileName} onChangeText={setProfileName} placeholder="Seu nome"/>
     <View style={s.infoCard}><Text style={s.infoTitle}>Segurança e privacidade</Text><Text style={s.infoText}>A entrada e a recuperação de senha usam Supabase Auth quando configurado. Biometria, revisão do armazenamento de sessão e controles de produção ainda não foram concluídos.</Text></View>
-    <Text style={s.helper}>Sessão: {session?.user.email || "não autenticada"}</Text>
-    <Button title="Sair da conta" onPress={signOut} secondary/>
+    <Text style={s.helper}>Acesso: {session?.user.email || "modo demonstração sem autenticação"}</Text>
+    {session ? <Button title="Sair da conta" onPress={signOut} secondary/> : <Button title="Sair do modo demonstração" onPress={() => setDemoMode(false)} secondary/>}
     <View style={s.settingRow}><Text style={s.settingTitle}>Notificações demonstrativas</Text><Text style={s.badge}>ATIVAS</Text></View>
     <Button title="Voltar ao início" onPress={() => go("Início")} secondary/>
   </>;
@@ -232,10 +234,10 @@ export default function App() {
   </> : null;
 
   return <SafeAreaView style={s.safe}><StatusBar barStyle="dark-content"/><ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-    {authLoading ? <View style={s.authLoading}><Text style={s.authSubtitle}>Carregando sua sessão...</Text></View> : !session ? renderAuth() : operation ? renderOperation() : active === "Início" ? renderHome() : active === "Extrato" ? renderStatement() : active === "Cartões" ? renderCards() : renderProfile()}
+    {authLoading ? <View style={s.authLoading}><Text style={s.authSubtitle}>Carregando sua sessão...</Text></View> : !session && !demoMode ? renderAuth() : operation ? renderOperation() : active === "Início" ? renderHome() : active === "Extrato" ? renderStatement() : active === "Cartões" ? renderCards() : renderProfile()}
     {notice && !operation ? <TouchableOpacity style={s.noticeToast} onPress={() => setNotice("")}><Text style={s.noticeToastText}>{notice}  ×</Text></TouchableOpacity> : null}
   </ScrollView>
-  {session && !operation && !authLoading ? <View style={s.tabs}>{(["Início","Extrato","Cartões","Perfil"] as Tab[]).map(tab => <TouchableOpacity key={tab} style={s.tabButton} onPress={() => go(tab)} activeOpacity={0.7}><Text style={[s.tabIcon, active === tab && s.tabIconActive]}>{tab === "Início" ? "⌂" : tab === "Extrato" ? "▤" : tab === "Cartões" ? "▣" : "○"}</Text><Text style={[s.tabText, active === tab && s.tabTextActive]}>{tab}</Text></TouchableOpacity>)}</View> : null}
+  {(session || demoMode) && !operation && !authLoading ? <View style={s.tabs}>{(["Início","Extrato","Cartões","Perfil"] as Tab[]).map(tab => <TouchableOpacity key={tab} style={s.tabButton} onPress={() => go(tab)} activeOpacity={0.7}><Text style={[s.tabIcon, active === tab && s.tabIconActive]}>{tab === "Início" ? "⌂" : tab === "Extrato" ? "▤" : tab === "Cartões" ? "▣" : "○"}</Text><Text style={[s.tabText, active === tab && s.tabTextActive]}>{tab}</Text></TouchableOpacity>)}</View> : null}
   </SafeAreaView>;
 }
 function Quick({symbol,label,onPress}:{symbol:string;label:string;onPress:()=>void}) {
