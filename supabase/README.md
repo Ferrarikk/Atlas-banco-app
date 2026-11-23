@@ -7,6 +7,8 @@ Esta etapa prepara a base técnica do protótipo. Não cria conta bancária real
 - `profiles`: perfil associado ao usuário autenticado.
 - `demo_accounts`: conta identificada como demonstração.
 - `demo_transactions`: lançamentos fictícios, sempre com status `simulated`.
+- `demo_accounts.demo_balance`: saldo demonstrativo alterado somente pela função SQL do servidor.
+- `atlas_simulate_debit`: função RPC autenticada, atômica e idempotente para débitos fictícios; bloqueia saldo insuficiente e não movimenta dinheiro.
 - RLS com leitura restrita ao proprietário.
 - Nenhuma permissão do cliente para inserir/alterar contas ou movimentações.
 - Trigger para criar perfil e conta demonstrativa após cadastro no Supabase Auth.
@@ -37,7 +39,7 @@ Nunca coloque a chave `service_role` no cliente, no `.env.example`, no GitHub ou
 
 ## Armazenamento de sessão
 
-- iOS/Android: o adaptador atual usa AES-CTR com chave aleatória no Keychain/Android Keystore e conteúdo no AsyncStorage, mas não autentica a integridade do ciphertext. É experimental e não deve ser tratado como armazenamento seguro de produção; substituir por uma solução auditada com criptografia autenticada.
+- iOS/Android: sessões ficam somente em memória por enquanto; não há persistência de refresh token. O usuário precisará entrar novamente após reiniciar o app. Essa limitação é intencional até existir um adaptador de armazenamento persistente revisado e testado.
 - Web: o adaptador usa `localStorage` somente para a prévia demonstrativa. JavaScript executado na página pode acessar esse armazenamento. Para produção web, substituir por fluxo backend/BFF com cookies `HttpOnly`, `Secure` e `SameSite`.
 - Nenhuma implementação de armazenamento está certificada. Não use esta versão com dados bancários, credenciais reais ou operações financeiras.
 
@@ -45,8 +47,8 @@ Nunca coloque a chave `service_role` no cliente, no `.env.example`, no GitHub ou
 
 1. Aplicar e testar a migração/RLS no projeto Supabase.
 2. Configurar variáveis locais e testar cadastro, login, confirmação de e-mail, recuperação de senha e logout.
-3. Substituir o adaptador experimental de sessão por armazenamento seguro auditável e testar persistência no iOS/Android.
+3. Escolher, revisar e testar um adaptador de armazenamento persistente seguro para sessão no iOS/Android.
 4. Buscar perfil e conta demonstrativa pelo usuário autenticado.
-5. Persistir somente lançamentos de demonstração por função/endpoint com autorização; nunca aceitar saldo enviado pelo cliente.
+5. Testar a RPC `atlas_simulate_debit` quanto a concorrência, idempotência, saldo insuficiente e isolamento entre usuários.
 
 Esta estrutura não é um livro-razão financeiro, não integra Pix, não processa pagamentos e não autoriza operações reais. Qualquer evolução financeira futura exige ledger no servidor, idempotência, controles antifraude, reconciliação, parceiro autorizado e revisão jurídica/regulatória.
