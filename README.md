@@ -5,11 +5,11 @@ Aplicativo demonstrativo para iOS e Android com Expo, React Native e TypeScript.
 ## Estado do projeto
 
 - Interface de demonstração com início, extrato, cartões e perfil.
-- PIX, transferência e pagamento são apenas simulações locais; não movimentam dinheiro.
+- PIX, transferência e pagamento são sempre simulações; com Supabase configurado, débitos fictícios são registrados no servidor de demonstração. Nenhuma operação movimenta dinheiro.
 - Telas de cadastro, login, recuperação de senha e logout chamam Supabase Auth quando as variáveis locais estão configuradas.
-- O modo demonstração continua disponível sem Supabase e usa apenas estado local, que pode ser perdido ao fechar o app.
+- O modo demonstração sem login usa estado local, que pode ser perdido ao fechar o app. Com login e migrações aplicadas, saldo e extrato vêm do Supabase.
 - Migrações do Supabase preparadas em `supabase/migrations/`; ainda não há confirmação de aplicação ou teste em um projeto.
-- Cliente Supabase criado em `src/lib/supabase.ts` e fluxos de autenticação conectados no app; a conexão real ainda depende de um projeto Supabase e de teste com credenciais locais.
+- Cliente Supabase criado em `src/lib/supabase.ts`; cadastro, login, recuperação, leitura da conta/extrato e débito demonstrativo via RPC estão conectados no código. A conexão real ainda depende de um projeto configurado e testes.
 - No iOS/Android, a sessão fica somente em memória nesta etapa; será necessário entrar novamente após reiniciar o app. A persistência segura aguarda um adaptador revisado.
 - Na prévia web, o armazenamento usa `localStorage` apenas para demonstração; não usar para contas reais.
 - Com usuário autenticado e migrações aplicadas, o saldo e extrato demonstrativos são lidos do Supabase; débitos simulados passam por RPC atômica e idempotente. O modo sem Supabase continua local.
