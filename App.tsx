@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "./src/lib/supabase";
+import { createIdempotencyKey, loadDemoAccount, simulateDemoDebit } from "./src/lib/demoBanking";
 import {
   SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput,
   TouchableOpacity, View, Alert
@@ -27,8 +28,8 @@ const money = (n: number) => n.toLocaleString("pt-BR", { style: "currency", curr
 function BrandMark() {
   return <View style={s.brandRow}><View style={s.mark}><Text style={s.markA}>A</Text><View style={s.markSlash} /></View><Text style={s.brand}>ATLAS <Text style={s.brandAccent}>BANK</Text></Text></View>;
 }
-function Button({ title, onPress, secondary = false }: { title: string; onPress: () => void; secondary?: boolean }) {
-  return <TouchableOpacity activeOpacity={0.78} onPress={onPress} style={[s.button, secondary && s.buttonSecondary]}><Text style={[s.buttonText, secondary && s.buttonTextSecondary]}>{title}</Text></TouchableOpacity>;
+function Button({ title, onPress, secondary = false, disabled = false }: { title: string; onPress: () => void; secondary?: boolean; disabled?: boolean }) {
+  return <TouchableOpacity activeOpacity={0.78} disabled={disabled} onPress={onPress} style={[s.button, secondary && s.buttonSecondary, disabled && s.buttonBusy]}><Text style={[s.buttonText, secondary && s.buttonTextSecondary]}>{title}</Text></TouchableOpacity>;
 }
 function Field({ label, value, onChangeText, placeholder, keyboardType = "default", secureTextEntry = false }: any) {
   return <View style={s.fieldWrap}><Text style={s.fieldLabel}>{label}</Text><TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#AAA5B1" keyboardType={keyboardType} autoCapitalize="none" secureTextEntry={secureTextEntry} style={s.input}/></View>;
@@ -60,6 +61,11 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [accountLoadError, setAccountLoadError] = useState("");
+  const [operationBusy, setOperationBusy] = useState(false);
+  const [operationIdempotencyKey, setOperationIdempotencyKey] = useState("");
 
   useEffect(() => {
     if (!supabase) {
@@ -87,6 +93,35 @@ export default function App() {
     const metadataName = session.user.user_metadata?.display_name;
     const emailName = session.user.email?.split("@")[0];
     setProfileName(typeof metadataName === "string" && metadataName.trim() ? metadataName : (emailName || "Usuário"));
+  }, [session]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!session || !supabase) {
+      setAccountId(null);
+      setAccountLoading(false);
+      setAccountLoadError("");
+      return () => { alive = false; };
+    }
+
+    setAccountLoading(true);
+    setAccountLoadError("");
+    loadDemoAccount(session.user.id)
+      .then(snapshot => {
+        if (!alive) return;
+        setAccountId(snapshot.accountId);
+        setBalance(snapshot.balance);
+        setTransactions(snapshot.transactions);
+      })
+      .catch(error => {
+        if (!alive) return;
+        setAccountLoadError(error instanceof Error ? error.message : "Não foi possível carregar a conta demonstrativa.");
+      })
+      .finally(() => {
+        if (alive) setAccountLoading(false);
+      });
+
+    return () => { alive = false; };
   }, [session]);
 
   const submitAuth = async () => {
@@ -146,8 +181,16 @@ export default function App() {
 
   const filtered = useMemo(() => transactions.filter(t => filter === "Todas" || (filter === "Entradas" ? t.kind === "in" : t.kind === "out")), [transactions, filter]);
   const go = (tab: Tab) => { setOperation(null); setNotice(""); setActive(tab); };
-  const startOperation = (op: Operation) => { setRecipient(""); setAmount(""); setDescription(""); setOperation(op); setNotice(""); };
-  const finishOperation = () => {
+  const startOperation = (op: Operation) => {
+    setRecipient("");
+    setAmount("");
+    setDescription("");
+    setOperationIdempotencyKey(createIdempotencyKey());
+    setOperation(op);
+    setNotice("");
+  };
+  const finishOperation = async () => {
+    if (operationBusy || !operation) return;
     const numeric = Number(amount.replace(",", "."));
     if (!recipient.trim() || !Number.isFinite(numeric) || numeric <= 0) {
       setNotice("Preencha o destinatário e um valor válido.");
@@ -157,14 +200,43 @@ export default function App() {
       setNotice("Saldo demonstrativo insuficiente para esta simulação.");
       return;
     }
+    if (session && (!supabase || !accountId)) {
+      setNotice("A conta demonstrativa ainda não está disponível. Confira a configuração do Supabase.");
+      return;
+    }
+
     const title = operation === "PIX" ? "PIX simulado" : operation === "Transferir" ? "Transferência simulada" : "Pagamento simulado";
-    const now = new Date().toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
-    const tx: Tx = { id: String(Date.now()), title, detail: now + " · Operação fictícia", amount: -numeric, date: "Hoje", kind: "out" };
-    setTransactions(prev => [tx, ...prev]);
-    setBalance(prev => Number((prev - numeric).toFixed(2)));
-    setOperation(null);
-    setActive("Extrato");
-    setNotice("Simulação concluída. Nenhum dinheiro foi enviado ou pago.");
+    setOperationBusy(true);
+    setNotice("");
+    try {
+      if (session && accountId) {
+        const serverDescription = description.trim()
+          ? `${title}: ${description.trim().slice(0, 90)}`
+          : title;
+        await simulateDemoDebit(
+          accountId,
+          numeric,
+          serverDescription,
+          operationIdempotencyKey || createIdempotencyKey(),
+        );
+        const snapshot = await loadDemoAccount(session.user.id);
+        setBalance(snapshot.balance);
+        setTransactions(snapshot.transactions);
+      } else {
+        const now = new Date().toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+        const tx: Tx = { id: String(Date.now()), title, detail: now + " · Operação fictícia", amount: -numeric, date: "Hoje", kind: "out" };
+        setTransactions(prev => [tx, ...prev]);
+        setBalance(prev => Number((prev - numeric).toFixed(2)));
+      }
+      setOperationIdempotencyKey("");
+      setOperation(null);
+      setActive("Extrato");
+      setNotice("Simulação registrada. Nenhum dinheiro foi enviado ou pago.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Não foi possível registrar a simulação.");
+    } finally {
+      setOperationBusy(false);
+    }
   };
 
   const renderAuth = () => <>
@@ -223,21 +295,21 @@ export default function App() {
   const renderOperation = () => operation ? <>
     <TouchableOpacity onPress={() => setOperation(null)} style={s.back}><Text style={s.backText}>‹  Voltar</Text></TouchableOpacity>
     {header(operation, operation === "PIX" ? "Simule um envio usando uma chave fictícia." : operation === "Transferir" ? "Simule uma transferência entre contas fictícias." : "Simule o pagamento de uma cobrança fictícia.")}
-    <View style={s.infoCard}><Text style={s.infoTitle}>Operação de teste</Text><Text style={s.infoText}>Nada será enviado, cobrado ou transferido. A simulação apenas atualiza o saldo e o extrato desta sessão.</Text></View>
+    <View style={s.infoCard}><Text style={s.infoTitle}>Operação de teste</Text><Text style={s.infoText}>Nada será enviado, cobrado ou transferido. Com Supabase configurado, a simulação é registrada no banco demonstrativo por uma função do servidor; sem login, fica apenas nesta sessão.</Text></View>
     <Field label={operation === "Pagar" ? "IDENTIFICAÇÃO DA COBRANÇA" : operation === "PIX" ? "CHAVE PIX FICTÍCIA" : "DESTINATÁRIO"} value={recipient} onChangeText={setRecipient} placeholder={operation === "PIX" ? "exemplo@teste.com" : "Nome de demonstração"}/>
     <Field label="VALOR (R$)" value={amount} onChangeText={setAmount} placeholder="0,00" keyboardType="decimal-pad"/>
     <Field label="DESCRIÇÃO (OPCIONAL)" value={description} onChangeText={setDescription} placeholder="Ex.: teste de operação"/>
     <View style={s.available}><Text style={s.availableLabel}>SALDO PARA SIMULAÇÃO</Text><Text style={s.availableValue}>{money(balance)}</Text></View>
     {notice ? <Text style={s.error}>{notice}</Text> : null}
-    <Button title="Revisar e simular operação" onPress={finishOperation}/>
+    <Button title={operationBusy ? "Registrando..." : "Revisar e simular operação"} onPress={finishOperation} disabled={operationBusy}/>
     <Button title="Cancelar" onPress={() => setOperation(null)} secondary/>
   </> : null;
 
   return <SafeAreaView style={s.safe}><StatusBar barStyle="dark-content"/><ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-    {authLoading ? <View style={s.authLoading}><Text style={s.authSubtitle}>Carregando sua sessão...</Text></View> : !session && !demoMode ? renderAuth() : operation ? renderOperation() : active === "Início" ? renderHome() : active === "Extrato" ? renderStatement() : active === "Cartões" ? renderCards() : renderProfile()}
+    {authLoading ? <View style={s.authLoading}><Text style={s.authSubtitle}>Carregando sua sessão...</Text></View> : !session && !demoMode ? renderAuth() : session && accountLoading ? <View style={s.authLoading}><Text style={s.authSubtitle}>Carregando sua conta demonstrativa...</Text></View> : session && accountLoadError ? <View style={s.authLoading}><Text style={s.authTitle}>Não foi possível carregar a conta</Text><Text style={s.authSubtitle}>{accountLoadError}</Text><Button title="Sair da conta" onPress={signOut} secondary/></View> : operation ? renderOperation() : active === "Início" ? renderHome() : active === "Extrato" ? renderStatement() : active === "Cartões" ? renderCards() : renderProfile()}
     {notice && !operation ? <TouchableOpacity style={s.noticeToast} onPress={() => setNotice("")}><Text style={s.noticeToastText}>{notice}  ×</Text></TouchableOpacity> : null}
   </ScrollView>
-  {(session || demoMode) && !operation && !authLoading ? <View style={s.tabs}>{(["Início","Extrato","Cartões","Perfil"] as Tab[]).map(tab => <TouchableOpacity key={tab} style={s.tabButton} onPress={() => go(tab)} activeOpacity={0.7}><Text style={[s.tabIcon, active === tab && s.tabIconActive]}>{tab === "Início" ? "⌂" : tab === "Extrato" ? "▤" : tab === "Cartões" ? "▣" : "○"}</Text><Text style={[s.tabText, active === tab && s.tabTextActive]}>{tab}</Text></TouchableOpacity>)}</View> : null}
+  {(session || demoMode) && !operation && !authLoading && !accountLoading && !accountLoadError ? <View style={s.tabs}>{(["Início","Extrato","Cartões","Perfil"] as Tab[]).map(tab => <TouchableOpacity key={tab} style={s.tabButton} onPress={() => go(tab)} activeOpacity={0.7}><Text style={[s.tabIcon, active === tab && s.tabIconActive]}>{tab === "Início" ? "⌂" : tab === "Extrato" ? "▤" : tab === "Cartões" ? "▣" : "○"}</Text><Text style={[s.tabText, active === tab && s.tabTextActive]}>{tab}</Text></TouchableOpacity>)}</View> : null}
   </SafeAreaView>;
 }
 function Quick({symbol,label,onPress}:{symbol:string;label:string;onPress:()=>void}) {
